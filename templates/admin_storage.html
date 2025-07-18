@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnResolute - Panel Admin</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/encuesta.css') }}">
+</head>
+<style>
+    .storage-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 100px); /* deja espacio para el header si hay */
+    padding-left: 240px; /* compensa menú lateral */
+    background-color: var(--grey);
+}
+
+.storage-card {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 2rem 3rem;
+    width: 600px;
+    max-width: 90%;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.table-usage {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-usage th,
+.table-usage td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #eaeaea;
+}
+
+.table-usage th {
+    background-color: #f0f0f0;
+    font-weight: 600;
+    color: var(--text);
+}
+
+
+    .user-block {
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 12px 16px;
+        background-color: #fafafa;
+    }
+
+    .user-summary {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        color: var(--text, #333);
+    }
+
+    .user-files {
+        display: none;
+        margin-top: 10px;
+        padding-left: 20px;
+        font-size: 0.95rem;
+        color: #555;
+    }
+
+    .arrow {
+        transition: transform 0.3s ease;
+    }
+
+    .arrow.rotate {
+        transform: rotate(90deg);
+    }
+
+    .user-files ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .user-files li {
+        margin-bottom: 6px;
+    }
+</style>
+
+
+</style>
+<body>
+    <nav id="menu" class="menu">
+        <!-- Menú lateral -->
+        <div class="actionBar">
+            <div>
+                <button id="menuBtn">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <h3 class="menuText">File-Encrypt</h3>
+            </div>
+        </div>
+               <ul class="optionsBar">
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/admin'">
+                    <i class="fa-solid fa-house"></i>
+                    <h5 class="menuText">Inicio</h5>
+                </button>
+                <li class="menuBreak">
+                    <hr>
+                </li>
+            </li>
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/users'">
+                    <i class="fa-solid fa-tag"></i>
+                    <h5 class="menuText">Usuarios</h5>
+                </button>
+            </li>
+            
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/admin/storage'">
+                    <i class="fa-solid fa-tag"></i>
+                    <h5 class="menuText">Almacenamiento</h5>
+                </button>
+            </li>
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='re_answer'">
+                    <i class="fa-solid fa-chart-bar"></i>
+                    <h5 class="menuText">Reportes</h5>
+                </button>
+            </li>
+        </ul>
+        
+        <div class="menuUser">
+            <a href="#">
+                <div>
+                    <img src="https://static.vecteezy.com/system/resources/previews/019/879/186/non_2x/user-icon-on-transparent-background-free-png.png" alt="image">
+                </div>
+                <h5 class="username menuText">{{ username }}</h5>
+                <p class="menuText"><i class="fa-solid fa-chevron-right"></i></p>
+            </a>
+        </div>
+        <div class="themeBar">
+            <div>
+                <button onclick="window.location.href='/logout'">
+                    <i class="fa-solid fa-right-from-bracket"></i> <p>Exit</p>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+<div class="storage-page">
+    <div class="storage-card">
+        <h2 class="section-title">Resumen de Uso</h2>
+
+        <!-- Gráfico de uso general -->
+        <div class="chart-container">
+            <h3>Uso Total: {{ total_general }}</h3>
+            <canvas id="storageChart"></canvas>
+        </div>
+
+        <!-- Lista de usuarios y sus archivos -->
+        <div class="user-storage-list">
+            {% for usuario, espacio in almacenamiento.items() %}
+                <div class="user-block">
+                    <div class="user-summary" onclick="toggleArchivos('{{ loop.index0 }}')">
+                        <span class="arrow" id="arrow-{{ loop.index0 }}">&#9654;</span>
+                        <strong>{{ usuario }}</strong> — {{ espacio }}
+                    </div>
+                    <div class="user-files" id="files-{{ loop.index0 }}" style="display: none;">
+                        <ul>
+                            {% for archivo in archivos %}
+                                {% if archivo.usuario == usuario %}
+                                    <li>{{ archivo.nombre }} — {{ archivo.tamaño }}</li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <div class="text-end mb-3">
+            <a href="{{ url_for('generate_storage_report') }}" class="btn btn-primary">
+                Descargar Reporte PDF
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Script para el gráfico y funcionalidad -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // Configuración del gráfico
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('storageChart').getContext('2d');
+    const storageChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: {{ labels_usuarios | tojson }},
+            datasets: [{
+                data: {{ datos_almacenamiento | tojson }},
+                backgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                    '#9966FF', '#FF9F40', '#8AC24A', '#607D8B'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Distribución de Almacenamiento por Usuario (MB)'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.label}: ${context.raw.toFixed(2)} MB`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+
+    // Función para mostrar/ocultar archivos de usuario
+    window.toggleArchivos = function(index) {
+        const filesDiv = document.getElementById(`files-${index}`);
+        const arrow = document.getElementById(`arrow-${index}`);
+        if (filesDiv.style.display === 'none') {
+            filesDiv.style.display = 'block';
+            arrow.classList.add('rotate');
+        } else {
+            filesDiv.style.display = 'none';
+            arrow.classList.remove('rotate');
+        }
+    };
+</script>
+
+    <script>
+        // Script para el menú lateral
+        document.getElementById('menuBtn').addEventListener('click', function() {
+            const menu = document.getElementById('menu');
+            menu.classList.toggle('open');
+            const menuTexts = document.querySelectorAll('.menuText');
+            menuTexts.forEach(text => text.classList.toggle('open2'));
+        });
+    </script>
+</body>
+</html>

@@ -1,29 +1,44 @@
-from flask import Flask, get_flashed_messages, render_template, send_file, request, redirect, url_for, send_from_directory, flash, jsonify, abort
+import io
+from flask import Flask, get_flashed_messages, make_response, render_template, send_file, request, redirect, url_for, send_from_directory, flash, jsonify, abort
 from flask_pymongo import PyMongo
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from gridfs import GridFS
 from io import BytesIO
 from cryptography.fernet import Fernet
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
+from flask_mail import Mail, Message
+from datetime import datetime, timedelta
+import secrets
 
 app = Flask(__name__)
-app.secret_key = 'una_clave_secreta_muy_segura_y_unica'
+app.secret_key = 'una_clave_secreta_muy_segura_y_unica'  
 
 # Configuración de MongoDB
 app.config["MONGO_URI"] = "mongodb://localhost:27017/file_encrypt_db"
 mongo = PyMongo(app)
 fs = GridFS(mongo.db) 
+
+# Configuración de correo
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'onresolutefileencript@gmail.com'
+app.config['MAIL_PASSWORD'] = 'nmkvufjchwcodhlv'  # NO tu contraseña normal
+app.config['MAIL_DEFAULT_SENDER'] = ('FileEncript', 'onresolutefileencript@gmail.com')
+
+mail = Mail(app)
+
 
 # Configuración de Flask-Login
 login_manager = LoginManager()
@@ -99,16 +114,21 @@ def login():
 def register():
     if request.method == 'POST':
         username = request.form.get('username')
+        email = request.form.get('email')
         password = request.form.get('password')
         role = request.form.get('role', 'user') 
         existing_user = mongo.db.usuarios.find_one({'username': username})
+        existing_user = mongo.db.usuarios.find_one({
+            '$or': [{'username': username}, {'email': email}]
+        })
         if existing_user:
-            flash('El usuario ya existe. Por favor, inicia sesión.', 'warning')
+            flash('El usuario o correo ya están registrados. Inicia sesión.', 'warning')
             return redirect(url_for('login'))
         hashed_password = generate_password_hash(password)
     
         mongo.db.usuarios.insert_one({
             'username': username,
+            'email': email,
             'password': hashed_password, 
             'role': role  
         })
@@ -119,12 +139,109 @@ def register():
                          if category in ['success', 'warning']]
     return render_template('register.html', messages=filtered_messages)
 
+
+
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     flash('Sesión cerrada correctamente', 'success')
     return redirect(url_for('home'))
+
+#Ruta /forgot-password
+from datetime import datetime, timedelta
+import secrets
+from flask import request, flash, redirect, url_for, render_template
+from bson import ObjectId
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        user = mongo.db.usuarios.find_one({'email': email})
+
+        if user:
+            token = secrets.token_urlsafe(32)
+
+            mongo.db.password_resets.insert_one({
+                'user_id': str(user['_id']),
+                'token': token,
+                'expires_at': datetime.utcnow() + timedelta(minutes=15)
+            })
+
+            reset_link = url_for('reset_password', token=token, _external=True)
+
+            msg = Message(
+                subject="Recuperación de contraseña - FileEncript",
+                recipients=[email],
+                body=f"""Hola {user['username']},
+
+Hemos recibido una solicitud para restablecer tu contraseña.
+
+Puedes hacerlo usando este enlace (válido por 15 minutos):
+{reset_link}
+
+Si tú no solicitaste esto, ignora este mensaje.
+
+Saludos,
+Equipo FileEncript - OnResolute"""
+            )
+            
+            try:
+                print(">>> Intentando enviar el correo de recuperación...")
+                mail.send(msg)
+                print(">>> Correo de recuperación enviado correctamente")
+                flash('Se ha enviado un enlace para restablecer tu contraseña.', 'info')
+            except Exception as e:
+                print(f">>> Error al enviar correo: {e}")
+                flash(f'Error al enviar correo: {e}', 'danger')
+        else:
+            flash('Si el correo está registrado, recibirás un enlace.', 'info')
+
+        return redirect(url_for('login'))
+
+    return render_template('forgot_password.html')
+
+
+
+
+
+#/reset-password/<token>
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    reset_entry = mongo.db.password_resets.find_one({'token': token})
+
+    if not reset_entry:
+        flash('Enlace inválido o expirado.', 'danger')
+        return redirect(url_for('login'))
+
+    if datetime.utcnow() > reset_entry['expires_at']:
+        mongo.db.password_resets.delete_one({'_id': reset_entry['_id']})
+        flash('El enlace ha expirado. Solicita uno nuevo.', 'warning')
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        new_password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if new_password != confirm_password:
+            flash('Las contraseñas no coinciden.', 'danger')
+            return redirect(request.url)
+
+        hashed_password = generate_password_hash(new_password)
+        user_id = reset_entry['user_id']
+
+        mongo.db.usuarios.update_one(
+            {'_id': ObjectId(user_id)},
+            {'$set': {'password': hashed_password}}
+        )
+
+        # Borrar el token usado
+        mongo.db.password_resets.delete_one({'_id': reset_entry['_id']})
+
+        flash('Tu contraseña ha sido actualizada correctamente.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', token=token)
 
 # Rutas principales
 @app.route('/')
@@ -190,6 +307,127 @@ def admin():
         flash('No tienes permisos para acceder a esta página', 'error')
         return redirect(url_for('panel_user'))
     return redirect(url_for('login'))
+
+#Almacenamiento
+@app.route('/admin/storage')
+@login_required
+def admin_storage():
+    if current_user.is_authenticated:
+        user = mongo.db.usuarios.find_one({'_id': ObjectId(current_user.id)})
+        if user and user.get('role') == 'admin':
+            # Obtener todos los archivos
+            archivos = list(mongo.db.archivos.find())
+            almacenamiento = {}
+            total_encriptados = 0
+            total_no_encriptados = 0
+            total_general = 0
+
+            # Calcular el almacenamiento por usuario y total general
+            for archivo in archivos:
+                usuario = archivo.get('usuario')
+                tamaño_bytes = archivo.get('tamaño', 0)
+                encriptado = archivo.get('encriptado', False)
+
+                if usuario:
+                    almacenamiento[usuario] = almacenamiento.get(usuario, 0) + tamaño_bytes
+                    total_general += tamaño_bytes
+
+                    if encriptado:
+                        total_encriptados += 1
+                    else:
+                        total_no_encriptados += 1
+
+            # Función para convertir bytes a formato legible
+            def formato_legible(tam_bytes):
+                for unidad in ['B', 'KB', 'MB', 'GB']:
+                    if tam_bytes < 1024:
+                        return f"{tam_bytes:.2f} {unidad}"
+                    tam_bytes /= 1024
+                return f"{tam_bytes:.2f} TB"
+
+            # Convertir a MB para el gráfico
+            def bytes_a_mb(bytes_size):
+                return bytes_size / (1024 * 1024)
+
+            # Preparar datos para el gráfico
+            labels_usuarios = list(almacenamiento.keys())
+            datos_almacenamiento_mb = [bytes_a_mb(t) for t in almacenamiento.values()]
+            total_general_mb = bytes_a_mb(total_general)
+
+            # Formatear datos para mostrar
+            almacenamiento_legible = {u: formato_legible(t) for u, t in almacenamiento.items()}
+            archivos_con_formato = [
+                {
+                    'usuario': a.get('usuario'),
+                    'nombre': a.get('nombre'),
+                    'tamaño': formato_legible(a.get('tamaño', 0)),
+                    'tamaño_bytes': a.get('tamaño', 0)
+                } 
+                for a in archivos
+            ]
+
+            return render_template('admin_storage.html',
+                                almacenamiento=almacenamiento_legible,
+                                archivos=archivos_con_formato,
+                                labels_usuarios=labels_usuarios,
+                                datos_almacenamiento=datos_almacenamiento_mb,
+                                total_general=formato_legible(total_general),
+                                total_general_mb=total_general_mb,
+                                total_encriptados=total_encriptados,
+                                total_no_encriptados=total_no_encriptados)
+        else:
+            flash('No tienes permisos de administrador.', 'error')
+            return redirect(url_for('panel_user'))
+    return redirect(url_for('login'))
+
+@app.route('/admin/storage/pdf')
+@login_required
+def generate_storage_report():
+    if not current_user.is_authenticated:
+        return redirect(url_for('login'))
+
+    user = mongo.db.usuarios.find_one({'_id': ObjectId(current_user.id)})
+    if not user or user.get('role') != 'admin':
+        flash('No tienes permisos de administrador.', 'error')
+        return redirect(url_for('panel_user'))
+
+    archivos = mongo.db.archivos.find()
+    almacenamiento = {}
+
+    for archivo in archivos:
+        usuario = archivo.get('usuario')
+        tamaño = archivo.get('tamaño', 0)
+        if usuario:
+            almacenamiento[usuario] = almacenamiento.get(usuario, 0) + tamaño
+
+    # Crear PDF
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    pdf.setTitle("Reporte de Almacenamiento")
+    width, height = letter
+
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(50, height - 50, "Reporte de Almacenamiento por Usuario")
+
+    pdf.setFont("Helvetica", 12)
+    y = height - 90
+    for usuario, tam in almacenamiento.items():
+        pdf.drawString(50, y, f"Usuario: {usuario} - Almacenamiento: {round(tam / 1024, 2)} KB")
+        y -= 20
+        if y < 50:
+            pdf.showPage()
+            y = height - 50
+
+    pdf.save()
+    buffer.seek(0)
+
+    response = make_response(buffer.read())
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'attachment; filename=reporte_almacenamiento.pdf'
+    return response
+
+# Termina aqui lo de almacenamiento
+
 
 @app.route('/archive')
 @login_required
@@ -558,7 +796,61 @@ def submit_survey():
         flash('Error al enviar la encuesta', 'error')
         return redirect(url_for('survey'))
 
+@app.route('/usuarios_archivos')
+@login_required
+def usuarios_archivos():
+    if current_user.is_authenticated:
+        user = mongo.db.usuarios.find_one({'_id': ObjectId(current_user.id)})
+        if user and user.get('role') == 'admin':
+            # Obtener todos los usuarios
+            usuarios = list(mongo.db.usuarios.find())
 
+            # Para cada usuario, obtener estadísticas de archivos
+            usuarios_info = []
+            for u in usuarios:
+                archivos = list(mongo.db.archivos.find({'usuario': u['username']}))
+                total_archivos = len(archivos)
+                archivos_encriptados = len([a for a in archivos if a.get('encriptado', False)])
+                archivos_no_encriptados = total_archivos - archivos_encriptados
+                total_tamaño = sum(a.get('tamaño', 0) for a in archivos)
+                usuarios_info.append({
+                    'username': u['username'],
+                    'total_archivos': total_archivos,
+                    'archivos_encriptados': archivos_encriptados,
+                    'archivos_no_encriptados': archivos_no_encriptados,
+                    'total_tamaño': total_tamaño
+                })
+
+                # --- NUEVO BLOQUE PARA GRÁFICO ---
+
+            hoy = datetime.now().date()
+            conteo_por_dia = defaultdict(int)
+
+            fecha_inicio = hoy - timedelta(days=6)  # últimos 7 días incluyendo hoy
+
+            # Obtener archivos subidos en los últimos 7 días
+            archivos_recientes = list(mongo.db.archivos.find({
+                'fecha_subida': {'$gte': datetime.combine(fecha_inicio, datetime.min.time())}
+            }))
+
+            for archivo in archivos_recientes:
+                fecha = archivo['fecha_subida'].date()
+                conteo_por_dia[fecha] += 1
+
+            # Crear listas ordenadas para etiquetas y datos
+            fechas_ordenadas = [fecha_inicio + timedelta(days=i) for i in range(7)]
+            labels = [fecha.strftime('%d %b') for fecha in fechas_ordenadas]
+            data = [conteo_por_dia.get(fecha, 0) for fecha in fechas_ordenadas]
+
+            return render_template('usuarios_archivos.html',
+                                   usuarios=usuarios_info,
+                                   username=user['username'],
+                                   chart_labels=labels,
+                                    chart_data=data)
+        else:
+            flash('No tienes permisos para acceder a esta página', 'error')
+            return redirect(url_for('panel_user'))
+    return redirect(url_for('login'))
 
 
 

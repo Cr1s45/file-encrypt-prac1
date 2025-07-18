@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>File Encrypt - Panel de administración de usuarios</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <style>
+        :root {
+            --color-bg: #fdf6f0;
+            --color-primary: #d8a7b1;
+            --color-secondary: #f3d1cd;
+            --color-accent: #c69ca5;
+            --color-text: #5c3a3e;
+            --color-border: #d9b8b5;
+            --color-hover: #f8e7e5;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--color-bg);
+            color: var(--color-text);
+        }
+
+        /* Barra lateral oculta */
+        #menu {
+            width: 220px;
+            background-color: var(--color-primary);
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: -220px; /* Oculto inicialmente */
+            transition: left 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 1000;
+            box-shadow: 2px 0 8px rgba(198, 156, 165, 0.2);
+        }
+
+        #menu.open {
+            left: 0; /* Mostrar al abrir */
+        }
+
+        #menu .actionBar,
+        #menu .themeBar,
+        #menu .menuUser {
+            padding: 0 1rem;
+        }
+
+        #menuBtn {
+            background: none;
+            border: none;
+            color: var(--color-text);
+            font-size: 1.4rem;
+            cursor: pointer;
+            margin: 1rem;
+        }
+
+        #menu .menuText {
+            color: white;
+            margin-left: 10px;
+        }
+
+        .optionsBar {
+            list-style: none;
+            padding: 0;
+            margin: 2rem 0;
+        }
+
+        .menuItem {
+            margin: 1rem 0;
+        }
+
+        .menuOption {
+            background: none;
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            font-size: 1rem;
+            cursor: pointer;
+            width: 100%;
+            padding: 0.5rem 1rem;
+            text-align: left;
+        }
+
+        .menuOption:hover {
+            background-color: var(--color-secondary);
+            border-radius: 8px;
+            color: var(--color-text);
+        }
+
+        .menuBreak hr {
+            border: 0;
+            height: 1px;
+            background: white;
+            margin: 0.5rem 1rem;
+        }
+
+        .menuUser img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+        }
+
+        .themeBar button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .themeBar p {
+            margin: 0 0 0 8px;
+            color: white;
+        }
+
+        /* Contenido desplazado */
+        .container {
+            max-width: 1000px;
+            margin: 2rem auto 4rem auto;
+            background-color: white;
+            padding: 2rem 3rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(214, 182, 185, 0.3);
+        }
+
+        h2 {
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 2rem;
+            color: var(--color-accent);
+            font-size: 1.8rem;
+            letter-spacing: 1px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            border: 2px solid var(--color-border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 6px rgba(214, 182, 185, 0.3);
+        }
+
+        thead tr {
+            background-color: var(--color-secondary);
+        }
+
+        th, td {
+            padding: 12px 18px;
+            text-align: left;
+            border-bottom: 1px solid var(--color-border);
+            border-right: 1px solid var(--color-border);
+            color: var(--color-text);
+        }
+
+        th:last-child, td:last-child {
+            border-right: none;
+        }
+
+        tbody tr:hover {
+            background-color: var(--color-hover);
+        }
+
+        .chart-container {
+            margin-top: 3rem;
+            padding: 1.5rem;
+            border: 2px solid var(--color-border);
+            border-radius: 12px;
+            background-color: var(--color-bg);
+            box-shadow: 0 4px 15px rgba(214, 182, 185, 0.15);
+        }
+
+        .chart-container h3 {
+            text-align: center;
+            color: var(--color-primary);
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding-bottom: 2rem;
+            color: var(--color-accent);
+            font-weight: 500;
+            font-size: 0.9rem;
+            user-select: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Botón para mostrar la barra lateral -->
+    <button id="menuBtn"><i class="fa-solid fa-bars"></i></button>
+
+    <!-- Barra lateral -->
+    <nav id="menu" class="menu">
+        <div class="actionBar">
+            <h3 class="menuText">File-Encrypt</h3>
+        </div>
+        <ul class="optionsBar">
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/admin'">
+                    <i class="fa-solid fa-house"></i>
+                    <h5 class="menuText">Inicio</h5>
+                </button>
+                <li class="menuBreak"><hr></li>
+            </li>
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/re_answer'">
+                    <i class="fa-solid fa-chart-bar"></i>
+                    <h5 class="menuText">Reportes</h5>
+                </button>
+            </li>
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/panel_user'">
+                    <i class="fa-solid fa-tag"></i>
+                    <h5 class="menuText">Archivos</h5>
+                </button>
+            </li>
+            <li class="menuItem">
+                <button class="menuOption" onclick="window.location.href='/usuarios_archivos'">
+                    <i class="fa-solid fa-users"></i>
+                    <h5 class="menuText">Usuarios y Archivos</h5>
+                </button>
+            </li>
+        </ul>
+        <div class="menuUser">
+            <a href="#">
+                <img src="https://static.vecteezy.com/system/resources/previews/019/879/186/non_2x/user-icon-on-transparent-background-free-png.png" alt="image">
+                <h5 class="username menuText">{{ username }}</h5>
+                <p class="menuText"><i class="fa-solid fa-chevron-right"></i></p>
+            </a>
+        </div>
+        <div class="themeBar">
+            <button onclick="window.location.href='/logout'">
+                <i class="fa-solid fa-right-from-bracket"></i> <p>Exit</p>
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2>Usuarios y Archivos</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Total Archivos</th>
+                    <th>Encriptados</th>
+                    <th>No Encriptados</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for usuario in usuarios %}
+                <tr>
+                    <td>{{ usuario.username }}</td>
+                    <td>{{ usuario.total_archivos }}</td>
+                    <td>{{ usuario.archivos_encriptados }}</td>
+                    <td>{{ usuario.archivos_no_encriptados }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="chart-container">
+            <h3>Evolución de Archivos Subidos por Día</h3>
+            <canvas id="archivosChart" width="900" height="350"></canvas>
+        </div>
+    </div>
+
+    <div class="footer">
+        &copy; 2025 OnResolute - Seguridad de Archivos
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Gráfico de ejemplo
+        const ctx = document.getElementById('archivosChart').getContext('2d');
+        const archivosChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['1 Jul', '2 Jul', '3 Jul', '4 Jul', '5 Jul', '6 Jul', '7 Jul'],
+                datasets: [{
+                    label: 'Archivos subidos',
+                    data: [5, 8, 6, 10, 7, 9, 11],
+                    fill: true,
+                    backgroundColor: 'rgba(214, 182, 185, 0.4)',
+                    borderColor: 'rgba(198, 156, 165, 1)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointBackgroundColor: 'rgba(198, 156, 165, 1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true },
+                    x: {}
+                }
+            }
+        });
+
+        // Mostrar/ocultar menú
+        document.getElementById('menuBtn').addEventListener('click', function() {
+            document.getElementById('menu').classList.toggle('open');
+        });
+    </script>
+
+</body>
+</html>
